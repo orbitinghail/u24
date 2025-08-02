@@ -1,4 +1,33 @@
 //! An unsigned 24-bit integer type for Rust.
+//!
+//! This crate provides a `u24` type that represents unsigned 24-bit integers
+//! in little-endian format. The type has the same size, alignment, and memory layout as a
+//! little-endian encoded `u32`.
+//!
+//! # Examples
+//!
+//! Basic construction and usage:
+//!
+//! ```rust
+//! use u24::u24;
+//!
+//! // Create u24 values using the macro
+//! let zero = u24!(0);
+//! let small = u24!(42);
+//! let large = u24!(0xFFFFFF); // Maximum value
+//!
+//! // Convert from bytes
+//! let from_bytes = u24::from_le_bytes([0x34, 0x12, 0xAB]);
+//! assert_eq!(from_bytes.into_u32(), 0x00_AB1234);
+//!
+//! // Convert from u32 with bounds checking
+//! let checked = u24::checked_from_u32(0x123456).unwrap();
+//! let too_big = u24::checked_from_u32(0x01_000000); // None
+//!
+//! // Arithmetic operations
+//! let sum = u24!(100) + u24!(200);
+//! let product = u24!(16) * u24!(1024);
+//! ```
 
 #![warn(missing_docs)]
 
@@ -44,6 +73,43 @@ enum ZeroByte {
 }
 
 /// An unsigned little-endian encoded 24-bit integer.
+///
+/// # Memory Layout
+///
+/// The `u24` type has the same size (4 bytes), alignment (4 bytes), and memory layout as a
+/// little-endian encoded `u32`. The most significant byte is always zero, ensuring that
+/// the value never exceeds the 24-bit range.
+///
+/// ```text
+/// Memory layout (little-endian):
+/// [byte0] [byte1] [byte2] [0x00]
+/// ```
+///
+/// This layout ensures that `u24` values can be safely transmuted to/from `u32` values
+/// while maintaining the 24-bit constraint.
+///
+/// # Examples
+///
+/// ```rust
+/// use u24::u24;
+///
+/// // Create from literal values
+/// let val = u24!(0x123456);
+/// assert_eq!(val.into_u32(), 0x00_123456);
+///
+/// // Create from byte array
+/// let val = u24::from_le_bytes([0x56, 0x34, 0x12]);
+/// assert_eq!(val.into_u32(), 0x00_123456);
+///
+/// // Convert back to bytes
+/// assert_eq!(val.to_le_bytes(), [0x56, 0x34, 0x12]);
+///
+/// // Arithmetic operations
+/// let a = u24!(1000);
+/// let b = u24!(2000);
+/// let sum = a + b;
+/// assert_eq!(sum, u24!(3000));
+/// ```
 #[derive(Clone, Copy, PartialEq, Eq, TryFromBytes, IntoBytes, Immutable, Default)]
 #[repr(C, align(4))]
 #[allow(non_camel_case_types)]
