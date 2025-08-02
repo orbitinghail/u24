@@ -2,6 +2,13 @@
 name = "u24"
 version = "0.1.0"
 edition = "2024"
+authors = ["orbitinghail <hello@orbitinghail.dev>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/orbitinghail/u24"
+homepage = "https://github.com/orbitinghail/u24"
+
+categories = ["data-structures", "encoding"]
+description = "An unsigned 24-bit integer type."
 
 [dependencies]
 num = "0.4"
