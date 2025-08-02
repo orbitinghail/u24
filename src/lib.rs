@@ -29,9 +29,10 @@
 //! let product = u24!(16) * u24!(1024);
 //! ```
 
+#![no_std]
 #![warn(missing_docs)]
 
-use std::{
+use core::{
     error::Error,
     fmt::{self, Debug, Display},
     num::{IntErrorKind, ParseIntError},
@@ -250,7 +251,7 @@ impl u24 {
         // SAFETY:
         // 1. we mask the MSB to 0
         // 2. both types have the same size and alignment
-        unsafe { std::mem::transmute(v & Self::U32_DATA_MASK) }
+        unsafe { core::mem::transmute(v & Self::U32_DATA_MASK) }
     }
 
     /// Creates a `u24` from a `u32` if it fits, otherwise returns `None`.
@@ -586,7 +587,7 @@ impl ParseU24Err {
     /// # Examples
     ///
     /// ```
-    /// use std::num::IntErrorKind;
+    /// use core::num::IntErrorKind;
     /// use u24::u24;
     /// use num::Num;
     ///
@@ -633,13 +634,13 @@ impl Num for u24 {
 }
 
 impl PartialOrd for u24 {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Ord for u24 {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.into_u32().cmp(&other.into_u32())
     }
 }
@@ -654,7 +655,7 @@ macro_rules! impl_cmp_eq {
             }
 
             impl PartialOrd<$ty> for u24 {
-                fn partial_cmp(&self, other: &$ty) -> Option<std::cmp::Ordering> {
+                fn partial_cmp(&self, other: &$ty) -> Option<core::cmp::Ordering> {
                     self.$convert().and_then(|v| v.partial_cmp(other))
                 }
             }
@@ -871,6 +872,11 @@ impl AsPrimitive<u24> for u24 {
 
 #[cfg(test)]
 mod tests {
+    // tests use std
+    extern crate std;
+    use std::println;
+    use std::string::ToString;
+
     use super::*;
     use num::{Bounded, FromPrimitive, Num, NumCast, One, PrimInt, ToPrimitive, Zero};
 
@@ -1340,7 +1346,7 @@ mod tests {
 
     #[test]
     fn test_error_display() {
-        use std::error::Error;
+        use core::error::Error;
 
         let parse_err = u24::from_str_radix("", 10).unwrap_err();
         assert!(!parse_err.to_string().is_empty());

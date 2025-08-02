@@ -13,6 +13,7 @@ An unsigned 24-bit integer type for Rust.
 
 - **u32 layout**: Same memory footprint as `u32` but enforces 24-bit constraint
 - **Num traits**: Implements all expected numeric traits from `std` and [`num`]
+- **No Std**: Does not depend on the Rust stdlib
 
 [`num`]: https://github.com/rust-num/num
 
