@@ -1,3 +1,7 @@
+//! An unsigned 24-bit integer type for Rust.
+
+#![warn(missing_docs)]
+
 use std::{
     error::Error,
     fmt::{self, Debug, Display},
@@ -39,7 +43,7 @@ enum ZeroByte {
     Zero = 0,
 }
 
-/// Little-endian encoded u24
+/// An unsigned little-endian encoded 24-bit integer.
 #[derive(Clone, Copy, PartialEq, Eq, TryFromBytes, IntoBytes, Immutable, Default)]
 #[repr(C, align(4))]
 #[allow(non_camel_case_types)]
@@ -51,6 +55,24 @@ pub struct u24 {
 static_assertions::assert_eq_size!(u24, u32);
 static_assertions::assert_eq_align!(u24, u32);
 
+/// Creates a `u24` value from a literal or expression.
+///
+/// This macro provides a convenient way to construct `u24` values with compile-time
+/// validation. For literal values, it ensures they don't exceed `u24::MAX`.
+///
+/// # Examples
+///
+/// ```
+/// use u24::u24;
+///
+/// let zero = u24!(0);
+/// let one = u24!(1);
+/// let max = u24!(0xFFFFFF);
+///
+/// assert_eq!(zero, u24::ZERO);
+/// assert_eq!(one, u24::ONE);
+/// assert_eq!(max, u24::MAX);
+/// ```
 #[macro_export]
 macro_rules! u24 {
     (0) => {
@@ -66,24 +88,42 @@ macro_rules! u24 {
 }
 
 impl u24 {
+    /// The largest value that can be represented by this integer type.
     pub const MAX: u24 = Self {
         data: [0xFF, 0xFF, 0xFF],
         msb: ZeroByte::Zero,
     };
+
+    /// The smallest value that can be represented by this integer type.
     pub const MIN: u24 = Self {
         data: [0x0, 0x0, 0x0],
         msb: ZeroByte::Zero,
     };
-    const U32_DATA_MASK: u32 = 0x00_FFFFFF;
 
+    /// A `u24` value representing zero.
     pub const ZERO: u24 = Self::MIN;
+
+    /// A `u24` value representing one.
     pub const ONE: u24 = Self {
         data: [0x1, 0x0, 0x0],
         msb: ZeroByte::Zero,
     };
 
+    /// The number of bits in this integer type (24).
     pub const BITS: u32 = 24;
 
+    const U32_DATA_MASK: u32 = 0x00_FFFFFF;
+
+    /// Creates a `u24` from a little-endian byte array.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// let val = u24::from_le_bytes([0x34, 0x12, 0xAB]);
+    /// assert_eq!(val.into_u32(), 0x00_AB1234);
+    /// ```
     #[inline]
     pub const fn from_le_bytes(bytes: [u8; 3]) -> Self {
         Self {
@@ -92,16 +132,53 @@ impl u24 {
         }
     }
 
+    /// Returns the memory representation of this `u24` as a little-endian byte array.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// let val = u24::truncating_from_u32(0x00_AB1234);
+    /// assert_eq!(val.to_le_bytes(), [0x34, 0x12, 0xAB]);
+    /// ```
     #[inline]
     pub const fn to_le_bytes(self) -> [u8; 3] {
         self.data
     }
 
+    /// Converts this `u24` to a `u32` representation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// let val = u24::from_le_bytes([0x34, 0x12, 0xAB]);
+    /// assert_eq!(val.into_u32(), 0x00_AB1234);
+    ///
+    /// assert_eq!(u24::MAX.into_u32(), 0x00_FFFFFF);
+    /// assert_eq!(u24::MIN.into_u32(), 0x00_000000);
+    /// ```
     #[inline]
     pub const fn into_u32(self) -> u32 {
         zerocopy::transmute!(self)
     }
 
+    /// Creates a `u24` from a `u32`, truncating the most significant bytes if
+    /// necessary.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// let val = u24::truncating_from_u32(0x01_234567);
+    /// assert_eq!(val.into_u32(), 0x00_234567);
+    ///
+    /// let val = u24::truncating_from_u32(0xFF_FFFFFF);
+    /// assert_eq!(val.into_u32(), 0x00_FFFFFF);
+    /// ```
     #[inline]
     pub const fn truncating_from_u32(v: u32) -> Self {
         // SAFETY:
@@ -110,6 +187,19 @@ impl u24 {
         unsafe { std::mem::transmute(v & Self::U32_DATA_MASK) }
     }
 
+    /// Creates a `u24` from a `u32` if it fits, otherwise returns `None`.
+    ///
+    /// This function returns `None` if the input value is greater than `u24::MAX`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// assert_eq!(u24::checked_from_u32(0x00_FFFFFF), Some(u24::MAX));
+    /// assert_eq!(u24::checked_from_u32(0x01_000000), None);
+    /// assert_eq!(u24::checked_from_u32(0), Some(u24::MIN));
+    /// ```
     #[inline]
     pub const fn checked_from_u32(v: u32) -> Option<Self> {
         if v > Self::MAX.into_u32() {
@@ -119,6 +209,19 @@ impl u24 {
         }
     }
 
+    /// Creates a `u24` from a `u32`, saturating at the bounds.
+    ///
+    /// If the input value is greater than `u24::MAX`, returns `u24::MAX`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// assert_eq!(u24::saturating_from_u32(0x00_FFFFFF), u24::MAX);
+    /// assert_eq!(u24::saturating_from_u32(0x01_000000), u24::MAX);
+    /// assert_eq!(u24::saturating_from_u32(0x00_123456), u24::truncating_from_u32(0x00_123456));
+    /// ```
     #[inline]
     pub const fn saturating_from_u32(v: u32) -> Self {
         match Self::checked_from_u32(v) {
@@ -127,6 +230,12 @@ impl u24 {
         }
     }
 
+    /// Creates a `u24` from a `u32`, panicking in debug builds if out of range.
+    /// Undefined behavior on release builds.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `v > u24::MAX.into_u32()`.
     #[inline]
     pub(crate) const fn must_from_u32(v: u32) -> Self {
         #[cfg(debug_assertions)]
@@ -136,6 +245,16 @@ impl u24 {
         Self::truncating_from_u32(v)
     }
 
+    /// Checked integer addition. Returns `None` on overflow.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// assert_eq!(u24!(100).checked_add(u24!(50)), Some(u24!(150)));
+    /// assert_eq!(u24::MAX.checked_add(u24!(1)), None);
+    /// ```
     #[inline]
     pub const fn checked_add(self, other: Self) -> Option<Self> {
         match self.into_u32().checked_add(other.into_u32()) {
@@ -145,6 +264,16 @@ impl u24 {
         }
     }
 
+    /// Checked integer subtraction. Returns `None` on underflow.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// assert_eq!(u24!(100).checked_sub(u24!(50)), Some(u24!(50)));
+    /// assert_eq!(u24!(0).checked_sub(u24!(1)), None);
+    /// ```
     #[inline]
     pub const fn checked_sub(self, other: Self) -> Option<Self> {
         match self.into_u32().checked_sub(other.into_u32()) {
@@ -155,6 +284,16 @@ impl u24 {
         }
     }
 
+    /// Checked integer multiplication. Returns `None` on overflow.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// assert_eq!(u24!(100).checked_mul(u24!(200)), Some(u24!(20000)));
+    /// assert_eq!(u24::MAX.checked_mul(u24!(2)), None);
+    /// ```
     #[inline]
     pub const fn checked_mul(self, other: Self) -> Option<Self> {
         match self.into_u32().checked_mul(other.into_u32()) {
@@ -164,6 +303,16 @@ impl u24 {
         }
     }
 
+    /// Checked integer division. Returns `None` if `other` is zero.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// assert_eq!(u24!(100).checked_div(u24!(5)), Some(u24!(20)));
+    /// assert_eq!(u24!(100).checked_div(u24!(0)), None);
+    /// ```
     #[inline]
     pub const fn checked_div(self, other: Self) -> Option<Self> {
         match self.into_u32().checked_div(other.into_u32()) {
@@ -174,6 +323,16 @@ impl u24 {
         }
     }
 
+    /// Saturating integer addition. Clamps the result at the maximum value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// assert_eq!(u24!(100).saturating_add(u24!(50)), u24!(150));
+    /// assert_eq!(u24::MAX.saturating_add(u24!(1)), u24::MAX);
+    /// ```
     #[inline]
     pub const fn saturating_add(self, other: Self) -> Self {
         match self.checked_add(other) {
@@ -182,6 +341,16 @@ impl u24 {
         }
     }
 
+    /// Saturating integer subtraction. Clamps the result at the minimum value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// assert_eq!(u24!(100).saturating_sub(u24!(50)), u24!(50));
+    /// assert_eq!(u24!(10).saturating_sub(u24!(50)), u24::MIN);
+    /// ```
     #[inline]
     pub const fn saturating_sub(self, other: Self) -> Self {
         match self.checked_sub(other) {
@@ -190,6 +359,16 @@ impl u24 {
         }
     }
 
+    /// Saturating integer multiplication. Clamps the result at the maximum value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// assert_eq!(u24!(100).saturating_mul(u24!(200)), u24!(20000));
+    /// assert_eq!(u24::MAX.saturating_mul(u24!(2)), u24::MAX);
+    /// ```
     #[inline]
     pub const fn saturating_mul(self, other: Self) -> Self {
         match self.checked_mul(other) {
@@ -331,10 +510,23 @@ impl Display for u24 {
     }
 }
 
+/// An error which can be returned when parsing a `u24`.
 #[derive(Debug)]
 pub struct ParseU24Err(IntErrorKind);
 
 impl ParseU24Err {
+    /// Returns the kind of error that occurred during parsing.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::num::IntErrorKind;
+    /// use u24::u24;
+    /// use num::Num;
+    ///
+    /// let err = u24::from_str_radix("", 10).unwrap_err();
+    /// assert_eq!(err.kind(), &IntErrorKind::Empty);
+    /// ```
     pub fn kind(&self) -> &IntErrorKind {
         &self.0
     }
@@ -361,9 +553,22 @@ impl From<ParseIntError> for ParseU24Err {
     }
 }
 
+impl Num for u24 {
+    type FromStrRadixErr = ParseU24Err;
+
+    fn from_str_radix(str: &str, radix: u32) -> Result<Self, Self::FromStrRadixErr> {
+        let v = u32::from_str_radix(str, radix)?;
+        if v > Self::MAX.into_u32() {
+            Err(ParseU24Err(IntErrorKind::PosOverflow))
+        } else {
+            Ok(Self::truncating_from_u32(v))
+        }
+    }
+}
+
 impl PartialOrd for u24 {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.into_u32().partial_cmp(&other.into_u32())
+        Some(self.cmp(other))
     }
 }
 
@@ -401,19 +606,6 @@ impl_cmp_eq!(
     i16.to_i16,
     i8.to_i8
 );
-
-impl Num for u24 {
-    type FromStrRadixErr = ParseU24Err;
-
-    fn from_str_radix(str: &str, radix: u32) -> Result<Self, Self::FromStrRadixErr> {
-        let v = u32::from_str_radix(str, radix)?;
-        if v > Self::MAX.into_u32() {
-            Err(ParseU24Err(IntErrorKind::PosOverflow))
-        } else {
-            Ok(Self::truncating_from_u32(v))
-        }
-    }
-}
 
 macro_rules! impl_bin_op {
     ($(($op:ident, $meth:ident, $assign_op:ident, $assign_meth:ident, $op_fn:ident),)*) => {
