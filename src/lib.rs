@@ -46,7 +46,7 @@ use num::{
     Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, FromPrimitive, Num, NumCast, One,
     PrimInt, Saturating, ToPrimitive, Unsigned, Zero,
     cast::AsPrimitive,
-    traits::{SaturatingAdd, SaturatingMul, SaturatingSub},
+    traits::{ConstOne, ConstZero, SaturatingAdd, SaturatingMul, SaturatingSub},
 };
 use zerocopy::{Immutable, IntoBytes, TryFromBytes, Unaligned};
 
@@ -164,15 +164,6 @@ impl u24 {
     /// The smallest value that can be represented by this integer type.
     pub const MIN: u24 = Self {
         data: [0x0, 0x0, 0x0],
-        msb: ZeroByte::Zero,
-    };
-
-    /// A `u24` value representing zero.
-    pub const ZERO: u24 = Self::MIN;
-
-    /// A `u24` value representing one.
-    pub const ONE: u24 = Self {
-        data: [0x1, 0x0, 0x0],
         msb: ZeroByte::Zero,
     };
 
@@ -559,10 +550,21 @@ impl Zero for u24 {
     }
 }
 
+impl ConstZero for u24 {
+    const ZERO: Self = u24::MIN;
+}
+
 impl One for u24 {
     fn one() -> Self {
         Self::ONE
     }
+}
+
+impl ConstOne for u24 {
+    const ONE: Self = Self {
+        data: [0x1, 0x0, 0x0],
+        msb: ZeroByte::Zero,
+    };
 }
 
 impl Debug for u24 {
