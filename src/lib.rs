@@ -131,6 +131,7 @@ static_assertions::assert_eq_align!(u24, u32);
 ///
 /// ```
 /// use u24::u24;
+/// use num::traits::{ConstZero, ConstOne};
 ///
 /// let zero = u24!(0);
 /// let one = u24!(1);
@@ -143,14 +144,14 @@ static_assertions::assert_eq_align!(u24, u32);
 #[macro_export]
 macro_rules! u24 {
     (0) => {
-        u24::ZERO
+        <u24 as ::num::traits::ConstZero>::ZERO
     };
     (1) => {
-        u24::ONE
+        <u24 as ::num::traits::ConstOne>::ONE
     };
     ($v:expr) => {{
         static_assertions::const_assert!($v <= u24::MAX.into_u32());
-        u24::truncating_from_u32($v)
+        $crate::u24::truncating_from_u32($v)
     }};
 }
 
