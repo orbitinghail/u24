@@ -51,6 +51,7 @@ use num::{
 use zerocopy::{ByteEq, ByteHash, Immutable, IntoBytes, KnownLayout, TryFromBytes, Unaligned};
 
 pub mod unaligned;
+pub use unaligned::U24;
 
 // The U24 type depends on the native endianness being little-endian
 static_assertions::assert_cfg!(target_endian = "little");
