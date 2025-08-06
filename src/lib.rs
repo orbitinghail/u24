@@ -48,7 +48,10 @@ use num::{
     cast::AsPrimitive,
     traits::{ConstOne, ConstZero, SaturatingAdd, SaturatingMul, SaturatingSub},
 };
-use zerocopy::{Immutable, IntoBytes, TryFromBytes, Unaligned};
+use zerocopy::{ByteEq, ByteHash, Immutable, IntoBytes, KnownLayout, TryFromBytes, Unaligned};
+
+pub mod unaligned;
+pub use unaligned::U24;
 
 // The U24 type depends on the native endianness being little-endian
 static_assertions::assert_cfg!(target_endian = "little");
@@ -58,17 +61,19 @@ static_assertions::assert_cfg!(target_endian = "little");
     TryFromBytes,
     IntoBytes,
     Immutable,
+    KnownLayout,
     Unaligned,
     Clone,
     Copy,
-    PartialEq,
-    Eq,
     PartialOrd,
     Ord,
     Default,
+    ByteHash,
+    ByteEq,
 )]
 #[repr(u8)]
-enum ZeroByte {
+#[doc(hidden)]
+pub enum ZeroByte {
     #[default]
     Zero = 0,
 }
@@ -111,7 +116,9 @@ enum ZeroByte {
 /// let sum = a + b;
 /// assert_eq!(sum, u24!(3000));
 /// ```
-#[derive(Clone, Copy, PartialEq, Eq, TryFromBytes, IntoBytes, Immutable, Default)]
+#[derive(
+    Clone, Copy, TryFromBytes, IntoBytes, KnownLayout, Immutable, Default, ByteHash, ByteEq,
+)]
 #[repr(C, align(4))]
 #[allow(non_camel_case_types)]
 pub struct u24 {
@@ -191,6 +198,24 @@ impl u24 {
         }
     }
 
+    /// Creates a `u24` from a big-endian byte array.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// let val = u24::from_be_bytes([0xAB, 0x12, 0x34]);
+    /// assert_eq!(val.into_u32(), 0x00_AB1234);
+    /// ```
+    #[inline]
+    pub const fn from_be_bytes(d: [u8; 3]) -> Self {
+        Self {
+            data: [d[2], d[1], d[0]],
+            msb: ZeroByte::Zero,
+        }
+    }
+
     /// Returns the memory representation of this `u24` as a little-endian byte array.
     ///
     /// # Examples
@@ -204,6 +229,22 @@ impl u24 {
     #[inline]
     pub const fn to_le_bytes(self) -> [u8; 3] {
         self.data
+    }
+
+    /// Returns the memory representation of this `u24` as a big-endian byte array.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// let val = u24::truncating_from_u32(0x00_AB1234);
+    /// assert_eq!(val.to_be_bytes(), [0xAB, 0x12, 0x34]);
+    /// ```
+    #[inline]
+    pub const fn to_be_bytes(self) -> [u8; 3] {
+        let d = self.data;
+        [d[2], d[1], d[0]]
     }
 
     /// Converts this `u24` to a `u32` representation.
