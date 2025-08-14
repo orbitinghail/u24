@@ -88,6 +88,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rangemap"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f93e7e49bb0bf967717f7bd674458b3d6b0c5f48ec7e3038166026a69fc22223"
+
+[[package]]
 name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -109,6 +115,7 @@ name = "u24"
 version = "0.2.0"
 dependencies = [
  "num",
+ "rangemap",
  "static_assertions",
  "zerocopy",
 ]

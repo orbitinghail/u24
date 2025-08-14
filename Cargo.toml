@@ -10,7 +10,12 @@ homepage = "https://github.com/orbitinghail/u24"
 categories = ["data-structures", "encoding", "no-std"]
 description = "An unsigned 24-bit integer type."
 
+[features]
+rangemap = ["dep:rangemap"]
+
 [dependencies]
 num = { version = "0.4", default-features = false }
 static_assertions = "1.1"
 zerocopy = { version = "0.8", default-features = false, features = ["derive"] }
+
+rangemap = { version = "1.6.0", optional = true }

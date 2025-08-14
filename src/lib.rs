@@ -914,6 +914,19 @@ impl AsPrimitive<u24> for u24 {
     }
 }
 
+#[cfg(feature = "rangemap")]
+impl rangemap::StepLite for u24 {
+    #[inline]
+    fn add_one(&self) -> Self {
+        self + Self::ONE
+    }
+
+    #[inline]
+    fn sub_one(&self) -> Self {
+        self - Self::ONE
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // tests use std
@@ -1424,5 +1437,16 @@ mod tests {
     fn test_must_from_u32_no_panic() {
         let val = u24::must_from_u32(0xFF_FFFF);
         assert_eq!(val, u24::MAX);
+    }
+
+    #[cfg(feature = "rangemap")]
+    #[test]
+    fn test_rangemap_step() {
+        use rangemap::StepLite;
+
+        let a = u24!(0);
+        let a = a.add_one();
+        let a = a.sub_one();
+        assert_eq!(a, u24!(0))
     }
 }
