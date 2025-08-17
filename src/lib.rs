@@ -46,7 +46,9 @@ use num::{
     Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, FromPrimitive, Num, NumCast, One,
     PrimInt, Saturating, ToPrimitive, Unsigned, Zero,
     cast::AsPrimitive,
-    traits::{ConstOne, ConstZero, SaturatingAdd, SaturatingMul, SaturatingSub},
+    traits::{
+        ConstOne, ConstZero, SaturatingAdd, SaturatingMul, SaturatingSub, WrappingAdd, WrappingSub,
+    },
 };
 use zerocopy::{ByteEq, ByteHash, Immutable, IntoBytes, KnownLayout, TryFromBytes, Unaligned};
 
@@ -177,6 +179,9 @@ impl u24 {
 
     /// The number of bits in this integer type (24).
     pub const BITS: u32 = 24;
+
+    /// The maximum number of values this integer type can represent.
+    pub const MAX_LEN: u32 = Self::MAX.into_u32() + 1;
 
     const U32_DATA_MASK: u32 = 0x00_FFFFFF;
 
@@ -475,6 +480,36 @@ impl u24 {
             Some(v) => v,
             None => Self::MAX,
         }
+    }
+
+    /// Wrapping integer addition. Wraps around at the 24-bit boundary.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// assert_eq!(u24!(100).wrapping_add(u24!(50)), u24!(150));
+    /// assert_eq!(u24::MAX.wrapping_add(u24!(1)), u24::MIN);
+    /// ```
+    #[inline]
+    pub const fn wrapping_add(self, other: Self) -> Self {
+        Self::truncating_from_u32(self.into_u32().wrapping_add(other.into_u32()))
+    }
+
+    /// Wrapping integer subtraction. Wraps around at the 24-bit boundary.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use u24::u24;
+    ///
+    /// assert_eq!(u24!(100).wrapping_sub(u24!(50)), u24!(50));
+    /// assert_eq!(u24::MIN.wrapping_sub(u24!(1)), u24::MAX);
+    /// ```
+    #[inline]
+    pub const fn wrapping_sub(self, other: Self) -> Self {
+        Self::truncating_from_u32(self.into_u32().wrapping_sub(other.into_u32()))
     }
 }
 
@@ -823,6 +858,8 @@ forward_impl!(
     (SaturatingAdd, saturating_add, u24),
     (SaturatingSub, saturating_sub, u24),
     (SaturatingMul, saturating_mul, u24),
+    (WrappingAdd, wrapping_add, u24),
+    (WrappingSub, wrapping_sub, u24),
 );
 
 impl Saturating for u24 {
@@ -924,6 +961,108 @@ impl rangemap::StepLite for u24 {
     #[inline]
     fn sub_one(&self) -> Self {
         self - Self::ONE
+    }
+}
+
+#[cfg(feature = "range-set-blaze")]
+impl range_set_blaze::Integer for u24 {
+    type SafeLen = u32;
+
+    #[inline]
+    fn checked_add_one(self) -> Option<Self> {
+        self.checked_add(u24::ONE)
+    }
+
+    #[inline]
+    fn add_one(self) -> Self {
+        self + u24::ONE
+    }
+
+    #[inline]
+    fn sub_one(self) -> Self {
+        self - u24::ONE
+    }
+
+    #[inline]
+    fn assign_sub_one(&mut self) {
+        *self -= u24::ONE
+    }
+
+    fn range_next(range: &mut core::ops::RangeInclusive<Self>) -> Option<Self> {
+        use core::cmp::Ordering;
+        let (start, end) = (*range.start(), *range.end());
+        match start.cmp(&end) {
+            Ordering::Less => {
+                *range = (start + u24::ONE)..=end;
+                Some(start)
+            }
+            Ordering::Equal => {
+                *range = u24::ONE..=u24::ZERO;
+                Some(start)
+            }
+            Ordering::Greater => None,
+        }
+    }
+
+    fn range_next_back(range: &mut core::ops::RangeInclusive<Self>) -> Option<Self> {
+        use core::cmp::Ordering;
+        let (end, start) = (*range.end(), *range.start());
+        match end.cmp(&start) {
+            Ordering::Greater => {
+                *range = start..=(end - u24::ONE);
+                Some(end)
+            }
+            Ordering::Equal => {
+                *range = u24::ONE..=u24::ZERO;
+                Some(end)
+            }
+            Ordering::Less => None,
+        }
+    }
+
+    #[inline]
+    fn min_value() -> Self {
+        u24::MIN
+    }
+
+    #[inline]
+    fn max_value() -> Self {
+        u24::MAX
+    }
+
+    fn safe_len(
+        range: &core::ops::RangeInclusive<Self>,
+    ) -> <Self as range_set_blaze::Integer>::SafeLen {
+        let (start, end) = (*range.start(), *range.end());
+        if start <= end {
+            (end - start).into_u32() + 1
+        } else {
+            0
+        }
+    }
+
+    #[inline]
+    fn f64_to_safe_len_lossy(f: f64) -> Self::SafeLen {
+        f as Self::SafeLen
+    }
+
+    #[inline]
+    fn safe_len_to_f64_lossy(len: Self::SafeLen) -> f64 {
+        len as f64
+    }
+
+    #[inline]
+    fn inclusive_end_from_start(self, b: Self::SafeLen) -> Self {
+        debug_assert!(b > 0 && b <= Self::MAX_LEN, "b must be in range 1..=2**24");
+        // If b is in range, two’s-complement wrap-around yields the correct start even if the sub overflows
+        self.wrapping_add(Self::truncating_from_u32(b - 1))
+    }
+
+    #[inline]
+    fn start_from_inclusive_end(self, b: Self::SafeLen) -> Self {
+        debug_assert!(b > 0 && b <= Self::MAX_LEN, "b must be in range 1..=2**24");
+        // If b is in range, two’s-complement wrap-around yields the correct start even if the sub overflows
+        self.wrapping_sub(Self::truncating_from_u32(b - 1))
     }
 }
 
@@ -1448,5 +1587,62 @@ mod tests {
         let a = a.add_one();
         let a = a.sub_one();
         assert_eq!(a, u24!(0))
+    }
+
+    #[cfg(feature = "range-set-blaze")]
+    #[test]
+    fn test_range_set_blaze_integer_trait() {
+        use range_set_blaze::Integer;
+        assert_eq!(u24!(0).checked_add_one(), Some(u24!(1)));
+        assert_eq!(u24::MAX.checked_add_one(), None);
+        assert_eq!(u24!(0).add_one(), u24!(1));
+        assert_eq!(u24!(1).sub_one(), u24!(0));
+
+        let mut x = u24!(1);
+        x.assign_sub_one();
+        assert_eq!(x, u24!(0));
+
+        let mut r = u24!(0)..=u24!(2);
+        assert_eq!(<u24 as Integer>::safe_len(&r), 3);
+        assert_eq!(<u24 as Integer>::range_next(&mut r), Some(u24!(0)));
+        assert_eq!(<u24 as Integer>::safe_len(&r), 2);
+        assert_eq!(<u24 as Integer>::range_next(&mut r), Some(u24!(1)));
+        assert_eq!(<u24 as Integer>::safe_len(&r), 1);
+        assert_eq!(<u24 as Integer>::range_next(&mut r), Some(u24!(2)));
+        assert_eq!(<u24 as Integer>::safe_len(&r), 0);
+        assert_eq!(<u24 as Integer>::range_next(&mut r), None);
+        assert_eq!(<u24 as Integer>::range_next(&mut r), None);
+
+        let mut r = u24::MAX..=u24::MAX;
+        assert_eq!(<u24 as Integer>::safe_len(&r), 1);
+        assert_eq!(<u24 as Integer>::range_next(&mut r), Some(u24::MAX));
+        assert_eq!(<u24 as Integer>::safe_len(&r), 0);
+        assert_eq!(<u24 as Integer>::range_next(&mut r), None);
+
+        let mut r = u24!(0)..=u24!(2);
+        assert_eq!(<u24 as Integer>::safe_len(&r), 3);
+        assert_eq!(<u24 as Integer>::range_next_back(&mut r), Some(u24!(2)));
+        assert_eq!(<u24 as Integer>::safe_len(&r), 2);
+        assert_eq!(<u24 as Integer>::range_next_back(&mut r), Some(u24!(1)));
+        assert_eq!(<u24 as Integer>::safe_len(&r), 1);
+        assert_eq!(<u24 as Integer>::range_next_back(&mut r), Some(u24!(0)));
+        assert_eq!(<u24 as Integer>::safe_len(&r), 0);
+        assert_eq!(<u24 as Integer>::range_next_back(&mut r), None);
+        assert_eq!(<u24 as Integer>::range_next_back(&mut r), None);
+
+        let mut r = u24::MAX..=u24::MAX;
+        assert_eq!(<u24 as Integer>::safe_len(&r), 1);
+        assert_eq!(<u24 as Integer>::range_next_back(&mut r), Some(u24::MAX));
+        assert_eq!(<u24 as Integer>::safe_len(&r), 0);
+        assert_eq!(<u24 as Integer>::range_next_back(&mut r), None);
+
+        assert_eq!(<u24 as Integer>::min_value(), u24::MIN);
+        assert_eq!(<u24 as Integer>::max_value(), u24::MAX);
+
+        assert_eq!(<u24 as Integer>::safe_len_to_f64_lossy(123), 123f64);
+        assert_eq!(<u24 as Integer>::f64_to_safe_len_lossy(123.5), 123);
+
+        assert_eq!(u24!(0).inclusive_end_from_start(123), u24!(122));
+        assert_eq!(u24!(122).start_from_inclusive_end(123), u24!(0));
     }
 }
