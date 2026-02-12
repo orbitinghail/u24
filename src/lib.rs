@@ -57,6 +57,7 @@ pub use unaligned::U24;
 
 // The U24 type depends on the native endianness being little-endian
 static_assertions::assert_cfg!(target_endian = "little");
+static_assertions::const_assert!(usize::BITS >= 32);
 
 #[derive(
     Debug,
@@ -695,7 +696,7 @@ impl Error for ParseU24Err {}
 
 impl From<ParseIntError> for ParseU24Err {
     fn from(err: ParseIntError) -> Self {
-        Self(err.kind().clone())
+        Self(*err.kind())
     }
 }
 
@@ -724,34 +725,67 @@ impl Ord for u24 {
     }
 }
 
-macro_rules! impl_cmp_eq {
-    ($($ty:ident . $convert:ident),*) => {
+macro_rules! impl_cmp_eq_small_unsigned {
+    ($($ty:ty),*) => {
         $(
             impl PartialEq<$ty> for u24 {
                 fn eq(&self, other: &$ty) -> bool {
-                    self.$convert().is_some_and(|v| v == *other)
+                    self.into_u32() == *other as u32
                 }
             }
 
             impl PartialOrd<$ty> for u24 {
                 fn partial_cmp(&self, other: &$ty) -> Option<core::cmp::Ordering> {
-                    self.$convert().and_then(|v| v.partial_cmp(other))
+                    Some(self.into_u32().cmp(&(*other as u32)))
                 }
             }
         )*
     };
 }
-impl_cmp_eq!(
-    usize.to_usize,
-    u64.to_u64,
-    u32.to_u32,
-    u16.to_u16,
-    u8.to_u8,
-    i64.to_i64,
-    i32.to_i32,
-    i16.to_i16,
-    i8.to_i8
-);
+
+macro_rules! impl_cmp_eq_small_signed {
+    ($($ty:ty),*) => {
+        $(
+            impl PartialEq<$ty> for u24 {
+                fn eq(&self, other: &$ty) -> bool {
+                    *other >= 0 && self.into_u32() == *other as u32
+                }
+            }
+
+            impl PartialOrd<$ty> for u24 {
+                fn partial_cmp(&self, other: &$ty) -> Option<core::cmp::Ordering> {
+                    if *other < 0 {
+                        Some(core::cmp::Ordering::Greater)
+                    } else {
+                        Some(self.into_u32().cmp(&(*other as u32)))
+                    }
+                }
+            }
+        )*
+    };
+}
+
+macro_rules! impl_cmp_eq_self_upcast {
+    ($($ty:ty),*) => {
+        $(
+            impl PartialEq<$ty> for u24 {
+                fn eq(&self, other: &$ty) -> bool {
+                    (self.into_u32() as $ty) == *other
+                }
+            }
+
+            impl PartialOrd<$ty> for u24 {
+                fn partial_cmp(&self, other: &$ty) -> Option<core::cmp::Ordering> {
+                    Some((self.into_u32() as $ty).cmp(other))
+                }
+            }
+        )*
+    };
+}
+
+impl_cmp_eq_small_unsigned!(u8, u16);
+impl_cmp_eq_small_signed!(i8, i16);
+impl_cmp_eq_self_upcast!(usize, u32, u64, i32, i64);
 
 macro_rules! impl_bin_op {
     ($(($op:ident, $meth:ident, $assign_op:ident, $assign_meth:ident, $op_fn:ident),)*) => {
@@ -1435,6 +1469,61 @@ mod tests {
         assert!(a <= b);
         assert!(b >= a);
         assert!(b >= b);
+    }
+
+    #[test]
+    fn test_cross_type_comparison_min_max_boundaries() {
+        let min = u24::MIN;
+        let max = u24::MAX;
+
+        assert_eq!(min, u8::MIN);
+        assert!(max > u8::MAX);
+        assert_eq!(u24!(u8::MAX as u32), u8::MAX);
+        // Out-of-range u24-to-u8 comparison must preserve ordering.
+        assert!(u24!(300) > 100u8);
+
+        assert_eq!(min, u16::MIN);
+        assert!(max > u16::MAX);
+        assert_eq!(u24!(u16::MAX as u32), u16::MAX);
+        // Out-of-range u24-to-u16 comparison must preserve ordering.
+        assert!(u24!(70000) > 100u16);
+
+        assert_eq!(min, u32::MIN);
+        assert!(max < u32::MAX);
+        // u32 can exceed u24 range; comparison must remain correct.
+        assert!(u24!(1) < u32::MAX);
+
+        assert_eq!(min, u64::MIN);
+        assert!(max < u64::MAX);
+        // u64 can exceed u24 range; comparison must remain correct.
+        assert!(u24!(1) < u64::MAX);
+
+        assert_eq!(min, usize::MIN);
+        assert!(max < usize::MAX);
+        // usize can exceed u24 range on supported targets; comparison must remain correct.
+        assert!(u24!(1) < usize::MAX);
+
+        assert!(min > i8::MIN);
+        assert!(max > i8::MAX);
+        assert_eq!(u24!(i8::MAX as u32), i8::MAX);
+        // Out-of-range u24-to-i8 comparison must preserve ordering.
+        assert!(u24!(200) > i8::MAX);
+
+        assert!(min > i16::MIN);
+        assert!(max > i16::MAX);
+        assert_eq!(u24!(i16::MAX as u32), i16::MAX);
+        // Out-of-range u24-to-i16 comparison must preserve ordering.
+        assert!(u24!(70000) > i16::MAX);
+
+        assert!(min > i32::MIN);
+        assert!(max < i32::MAX);
+        // i32 can exceed u24 range in both directions; comparisons must remain correct.
+        assert!(u24!(1) < i32::MAX);
+
+        assert!(min > i64::MIN);
+        assert!(max < i64::MAX);
+        // i64 can exceed u24 range in both directions; comparisons must remain correct.
+        assert!(u24!(1) < i64::MAX);
     }
 
     #[test]
