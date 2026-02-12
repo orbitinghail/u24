@@ -52,18 +52,7 @@ use crate::u24;
 /// assert_eq!(le_val.get(), u24!(0x123456));
 /// ```
 #[derive(
-    Debug,
-    FromBytes,
-    IntoBytes,
-    Immutable,
-    KnownLayout,
-    Unaligned,
-    Clone,
-    Copy,
-    PartialOrd,
-    Ord,
-    ByteEq,
-    ByteHash,
+    Debug, FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Clone, Copy, ByteEq, ByteHash,
 )]
 #[repr(C)]
 pub struct U24<O>([u8; 3], PhantomData<O>);
@@ -255,6 +244,18 @@ impl<O: ByteOrder> Display for U24<O> {
     }
 }
 
+impl<O: ByteOrder> PartialOrd for U24<O> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<O: ByteOrder> Ord for U24<O> {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.get().cmp(&other.get())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate std;
@@ -399,5 +400,14 @@ mod tests {
         assert_eq!(le_default.to_bytes(), [0, 0, 0]);
         assert_eq!(be_default.get(), u24!(0));
         assert_eq!(le_default.get(), u24!(0));
+    }
+
+    #[test]
+    fn test_little_endian_ordering_uses_numeric_value() {
+        let one = U24::<LE>::new(u24!(1));
+        let two_fifty_six = U24::<LE>::new(u24!(256));
+
+        // Little-endian byte layout must not affect numeric ordering.
+        assert!(one < two_fifty_six);
     }
 }

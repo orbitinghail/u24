@@ -21,6 +21,7 @@ jobs:
         with:
           toolchain: stable
           components: clippy, rustfmt
+          targets: wasm32-unknown-unknown
 
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
@@ -33,6 +34,9 @@ jobs:
 
       - name: Build
         run: cargo build
+
+      - name: Build (Wasm)
+        run: cargo build --target wasm32-unknown-unknown
 
       - name: Test
         run: cargo nextest run --benches --all-features
