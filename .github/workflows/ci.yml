@@ -27,7 +27,7 @@ jobs:
         with:
           token: ${{secrets.GITHUB_TOKEN}}
 
-      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Install Nextest
         run: curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C /usr/local/bin
@@ -42,7 +42,7 @@ jobs:
         run: cargo nextest run --benches --all-features
 
       - name: Clippy
-        uses: auguwu/clippy-action@94a9ff2f6920180b89e5c03d121d0af04a9d3e03 # 1.4.0
+        uses: auguwu/clippy-action@9817d076b82df0194935be9db6154c56ac07b317 # 1.5.0
         with:
           token: ${{secrets.GITHUB_TOKEN}}
 
